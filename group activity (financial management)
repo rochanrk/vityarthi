@@ -1,0 +1,182 @@
+import datetime
+import json
+import os
+
+EXPENSE_FILE = "expenses.json"
+
+expenses = []
+
+def load_expenses():
+    global expenses
+    if os.path.exists(EXPENSE_FILE):
+        try:
+            with open(EXPENSE_FILE, 'r') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    expenses = data
+                else:
+                    raise ValueError("File content is invalid.")
+            print(f"Loaded {len(expenses)} records.")
+        except Exception as e:
+            print(f"Error loading file. Starting fresh.")
+            expenses = []
+    else:
+        print("Starting with an empty ledger.")
+
+def save_expenses():
+    try:
+        with open(EXPENSE_FILE, 'w') as f:
+            json.dump(expenses, f, indent=4)
+        print("Data saved.")
+    except IOError:
+        print("Error: Could not save data.")
+
+def get_formatted_expense_table(with_index=False):
+    if not expenses:
+        return "\nNo expenses recorded yet."
+
+    max_desc = max(len(e['description']) for e in expenses) if expenses else 15
+    max_cat = max(len(e['category']) for e in expenses) if expenses else 8
+    
+    w_index = 5 if with_index else 0
+    w_date, w_amt, w_cat, w_desc = 10, 10, max(max_cat, 8), max(max_desc, 15)
+    
+    header_parts = []
+    if with_index:
+        header_parts.append(f"{'#':<{w_index}} | ")
+    header_parts.append(f"{'DATE':<{w_date}} | ")
+    header_parts.append(f"{'AMOUNT':>{w_amt}} | ")
+    header_parts.append(f"{'CATEGORY':<{w_cat}} | ")
+    header_parts.append(f"{'DESCRIPTION':<{w_desc}}")
+    
+    output = ["\n--- Expenses ---", "".join(header_parts)]
+
+    for i, expense in enumerate(expenses):
+        row_parts = []
+        if with_index:
+            row_parts.append(f"{i + 1:<{w_index}} | ")
+        row_parts.append(f"{expense['date']:<{w_date}} | ")
+        row_parts.append(f"{expense['amount']:>{w_amt}.2f} | ")
+        row_parts.append(f"{expense['category']:<{w_cat}} | ")
+        row_parts.append(f"{expense['description']:<{w_desc}}")
+        output.append("".join(row_parts))
+            
+    return "\n".join(output)
+
+def add_expense():
+    print("\n--- Add Expense ---")
+    
+    while True:
+        try:
+            amount = float(input("Enter amount spent: $"))
+            if amount <= 0:
+                print("Amount must be positive.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Enter a number.")
+
+    category = input("Enter category (e.g., Food, Travel): ").strip() or "Other"
+    description = input("Enter description: ").strip() or "No description"
+    date_str = datetime.date.today().isoformat()
+
+    new_expense = {
+        'amount': amount,
+        'category': category.title(),
+        'description': description,
+        'date': date_str
+    }
+        
+    expenses.append(new_expense)
+    print(f"\nAdded: ${amount:.2f} in {category.title()}.")
+    save_expenses()
+
+def view_expenses():
+    print(get_formatted_expense_table(with_index=False))
+
+def delete_expense():
+    if not expenses:
+        print("\nNo expenses to delete.")
+        return
+
+    print("\n--- Delete Expense ---")
+    print(get_formatted_expense_table(with_index=True))
+
+    while True:
+        try:
+            index_to_delete = int(input("\nEnter # to delete, or 0 to cancel: "))
+            
+            if index_to_delete == 0:
+                print("Cancelled.")
+                return
+            
+            list_index = index_to_delete - 1
+            
+            if 0 <= list_index < len(expenses):
+                deleted_item = expenses[list_index]
+                print(f"\nDelete: ${deleted_item['amount']:.2f} ({deleted_item['category']})?")
+                confirmation = input("Type 'YES' to confirm: ").strip().upper()
+                
+                if confirmation == 'YES':
+                    del expenses[list_index]
+                    save_expenses()
+                    print(f"\nExpense #{index_to_delete} deleted.")
+                else:
+                    print("Cancelled.")
+                break
+            else:
+                print(f"Invalid number. Enter 1 to {len(expenses)}, or 0.")
+                
+        except ValueError:
+            print("Invalid input. Enter a number.")
+            
+
+def get_total_expenses():
+    if not expenses:
+        print("\nNo expenses to total.")
+        return
+
+    total = sum(item['amount'] for item in expenses)
+    print(f"\n--- Total Expenses ---")
+    print(f"Total spent: ${total:.2f}")
+
+    category_totals = {}
+    for expense in expenses:
+        category = expense['category']
+        amount = expense['amount']
+        category_totals[category] = category_totals.get(category, 0) + amount
+
+    print("\n--- By Category ---")
+    for category, total in sorted(category_totals.items(), key=lambda item: item[1], reverse=True):
+        print(f"  {category:<10}: ${total:>.2f}")
+
+def main():
+    load_expenses()
+    
+    while True:
+        print("\n\n===== Expense Menu =====")
+        print("1. Add Expense")
+        print("2. View Expenses")
+        print("3. View Totals")
+        print("4. Delete Expense")
+        print("5. Exit and Save")
+        
+        choice = input("Enter choice (1-5): ").strip()
+        
+        if choice == '1':
+            add_expense()
+        elif choice == '2':
+            view_expenses()
+        elif choice == '3':
+            get_total_expenses()
+        elif choice == '4':
+            delete_expense()
+        elif choice == '5':
+            save_expenses()
+            print("\nGoodbye!")
+            break
+        else:
+            print("Invalid choice.")
+
+if __name__ == "__main__":
+    main()
